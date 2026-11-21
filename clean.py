@@ -98,3 +98,32 @@ def parse_money(raw):
         value = -value
         note = "refund (parentheses)" if in_parens else "negative amount"
     return value, currency, note
+
+def parse_domain(raw):
+    """Return (canonical domain or None, note)."""
+    text = (raw or "").strip().lower()
+    if not text:
+        return None, "blank domain"
+
+    text = re.sub(r"^[a-z][a-z0-9+.-]*://", "", text)   # scheme
+    text = re.split(r"[/?#]", text, maxsplit=1)[0]       # path, query, fragment
+    text = re.sub(r":\d+$", "", text)                    # port
+    text = text.strip(".")                               # stray dots
+    if text.startswith("www."):
+        text = text[4:]
+
+    if not text or "." not in text:
+        return None, "invalid domain (no dot)"
+
+    # Non-ASCII (e.g. cafe with an accent): convert to punycode, the form DNS uses.
+    try:
+        text = text.encode("idna").decode("ascii")
+    except UnicodeError:
+        return None, "invalid domain (cannot encode)"
+
+    for label in text.split("."):
+        if (not label
+                or label.startswith("-") or label.endswith("-")
+                or not re.fullmatch(r"[a-z0-9-]+", label)):
+            return None, "invalid domain"
+    return text, ""
