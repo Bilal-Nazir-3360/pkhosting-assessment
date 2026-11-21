@@ -51,3 +51,50 @@ def parse_date(raw):
     if result is None:
         return None, False, "impossible date"
     return result, False, ""
+
+def parse_money(raw):
+    """Parse an amount string. Returns (amount or None, currency or None, note)."""
+    text = (raw or "").strip()
+    if not text:
+        return None, None, "blank amount"
+
+    # 1. Currency: USD if "USD" or "$" appears, otherwise assume PKR.
+    currency = "USD" if ("USD" in text.upper() or "$" in text) else "PKR"
+
+    # 2. Sign: parentheses mean a refund, a leading minus means negative.
+    in_parens = text.startswith("(") and text.endswith(")")
+    negative = in_parens or text.startswith("-")
+
+    # 3. Keep only digits, commas and dots, then trim stray ones.
+    #    This removes "Rs.", "PKR", "₨", "/-" and spaces. The strip handles
+    #    the leftover dot from "Rs." so "Rs.12000" becomes "12000".
+    num = re.sub(r"[^\d.,]", "", text).strip(".,")
+    if not any(c.isdigit() for c in num):
+        return None, None, "no number found"
+
+    # 4. Decide which of "," and "." is the decimal separator.
+    if "," in num and "." in num:
+        if num.rfind(",") > num.rfind("."):      # 1.200,00 (European)
+            num = num.replace(".", "").replace(",", ".")
+        else:                                    # 18,000.00
+            num = num.replace(",", "")
+    elif "," in num:
+        tail = num.rsplit(",", 1)[1]
+        # 1,200 -> thousands separator. 1200,50 -> decimal comma.
+        num = num.replace(",", "") if len(tail) == 3 else num.replace(",", ".")
+    elif "." in num:
+        tail = num.rsplit(".", 1)[1]
+        # 1.200 -> thousands separator (PKR is whole rupees). 1200.50 -> decimal.
+        if len(tail) == 3:
+            num = num.replace(".", "")
+
+    try:
+        value = float(num)
+    except ValueError:
+        return None, None, "unparseable amount"
+
+    note = ""
+    if negative:
+        value = -value
+        note = "refund (parentheses)" if in_parens else "negative amount"
+    return value, currency, note

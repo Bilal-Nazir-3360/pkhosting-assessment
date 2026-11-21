@@ -17,3 +17,7 @@ not once for the whole file.
 
 The renewal total is reported twice, with and without the ambiguous_date rows,
 so the effect of the guess is visible.
+
+Two-digit years are read as 20xx, because all records are from the 2000s.
+
+Two-digit years are read as 20xx, because PKHosting records are all from the 2000s. Any parsed year outside 2000 to 2035 is flagged as implausible_year in issues.csv, not silently accepted.
