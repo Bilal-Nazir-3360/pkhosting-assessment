@@ -1,5 +1,5 @@
 from datetime import date
-from clean import parse_date, parse_money
+from clean import parse_date, parse_money, parse_domain
 
 def test_day_first_certain():
     d, ambiguous, note = parse_date("25/12/2025")
@@ -76,3 +76,36 @@ def test_money_trailing_dash():
 
 def test_money_european_format():
     assert parse_money("1.200,00") == (1200.0, "PKR", "")
+
+def test_money_dollar_symbol():
+    assert parse_money("$30") == (30.0, "USD", "")
+
+
+def test_money_no_space_after_rs():
+    assert parse_money("Rs.12000") == (12000.0, "PKR", "")
+
+
+def test_domain_plain():
+    assert parse_domain("example.pk") == ("example.pk", "")
+
+
+def test_domain_url_www_and_slash():
+    assert parse_domain("HTTPS://WWW.Shop.com.pk/") == ("shop.com.pk", "")
+
+
+def test_domain_spaces_and_trailing_dot():
+    assert parse_domain("  blog.pk. ") == ("blog.pk", "")
+
+
+def test_domain_port_and_path():
+    assert parse_domain("http://api.hosting.pk:8080/login") == ("api.hosting.pk", "")
+
+
+def test_domain_double_dot_is_invalid():
+    d, note = parse_domain("shop..com.pk")
+    assert d is None
+    assert "invalid" in note
+
+
+def test_domain_blank():
+    assert parse_domain("") == (None, "blank domain")
