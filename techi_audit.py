@@ -1,5 +1,6 @@
 """Polite metadata reader for TECHi.com (Part B)."""
 import hashlib
+import csv
 import json
 import logging
 import re
@@ -25,6 +26,9 @@ ROBOTS_URL = "https://www.techi.com/robots.txt"
 TIMEOUT = (5, 10)      # seconds: connect, read
 MIN_DELAY = 1.0        # brief: one request per second
 CACHED_STATUSES = (200, 404)   # timeouts and 5xx are never cached
+SITEMAP_TIMEOUT = (5, 30)   # the post sitemap is large, so a longer read time
+CSV_FIELDS = ["url", "slug", "title", "category",
+              "author_handle", "date_text", "date_iso"]
 
 RELATIVE_RE = re.compile(
     r"(\d+)\s*(minute|hour|day|week|month|year)s?\s+ago", re.IGNORECASE
@@ -308,3 +312,74 @@ class PoliteFetcher:
             log.warning("Blocked by robots.txt: %s", url)
             return None
         return self._request(url, timeout)
+
+def is_published_article(html):
+    """True if the page says og:type=article and has a published time."""
+    soup = BeautifulSoup(html, "html.parser")
+    return (_meta(soup, "og:type") == "article"
+            and bool(_meta(soup, "article:published_time")))
+
+
+def _fetch_text(fetcher, url, timeout=None):
+    """Body of a 200 page, or '' (the reason is logged)."""
+    page = fetcher.get(url, timeout) if timeout else fetcher.get(url)
+    if page is None:
+        log.warning("Skipped (not fetched): %s", url)
+        return ""
+    if page["status"] != 200:
+        log.warning("Skipped (status %s): %s", page["status"], url)
+        return ""
+    return page["body"]
+
+
+def collect_articles(fetcher, limit=20):
+    """Find up to `limit` published articles, starting from robots.txt."""
+    robots_text = _fetch_text(fetcher, ROBOTS_URL).lstrip("\ufeff")
+    rows = []
+    seen = set()
+    for sitemap_url in sitemap_lines_from_robots(robots_text):
+        index_urls = parse_sitemap(
+            _fetch_text(fetcher, sitemap_url, SITEMAP_TIMEOUT))
+        post_files = [u for u in index_urls if is_post_sitemap(u)]
+        for post_url in post_files:
+            urls = article_urls(parse_sitemap(
+                _fetch_text(fetcher, post_url, SITEMAP_TIMEOUT)))
+            for url in urls:
+                if len(rows) >= limit:
+                    return rows
+                if url in seen:
+                    continue
+                seen.add(url)
+                body = _fetch_text(fetcher, url)
+                if not body:
+                    continue
+                if not is_published_article(body):
+                    log.warning("Skipped (not a published article): %s", url)
+                    continue
+                page = fetcher.get(url)   # cache hit: gives fetched_at
+                fetched_at = datetime.fromisoformat(page["fetched_at"])
+                rows.append(extract_article(url, body, fetched_at))
+            if len(rows) >= limit:
+                return rows
+    return rows
+
+
+def write_csv(path, rows):
+    """Write rows as UTF-8 CSV. newline='' stops blank lines on Windows."""
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO,
+                        format="%(levelname)s %(message)s")
+    fetcher = PoliteFetcher(requests.Session(), "cache")
+    rows = collect_articles(fetcher, limit=20)
+    write_csv("techi_articles.csv", rows)
+    log.info("Wrote %d articles to techi_articles.csv", len(rows))
+
+
+if __name__ == "__main__":
+    main()
