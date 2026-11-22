@@ -1,4 +1,6 @@
 # NOTES
+This file covers Part A (the renewals cleanup). The notes and findings for Part B
+(the TECHi reader) are in README.md.
 
 ## About the data
 
