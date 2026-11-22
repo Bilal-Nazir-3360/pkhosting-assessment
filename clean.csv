@@ -8,8 +8,6 @@ R006,C106,refund.pk,Shared Hosting,12,-2500,2026-03-01,2027-03-01,refunded,r@ref
 R007,C107,blank.pk,VPS,1,,2026-08-10,2026-09-10,active,b@blank.pk
 R008,C108,usd.pk,SSL,12,,2026-08-20,2027-08-20,active,u@usd.pk
 R009,C109,dup.pk,VPS,12,24000,2025-08-20,2026-08-20,active,d@dup.pk
-R010,C109,dup.pk,VPS,12,26000,2025-08-20,2026-08-20,active,d@dup.pk
-R011,C101,example.pk,Domain .pk,12,3500,2025-08-10,2026-08-10,active,ali@example.pk
 R012,C110,gone.pk,Shared Hosting,12,9000,2025-08-25,2026-08-25,cancelled,g@gone.pk
 R013,C111,gone2.pk,Shared Hosting,12,9000,2025-08-26,2026-08-26,cancelled,g@gone2.pk
 R014,C112,susp.pk,VPS,12,30000,2025-09-01,2026-09-01,suspended,s@susp.pk
@@ -44,7 +42,6 @@ R043,C140,pending.pk,SSL,12,2000,2025-08-16,2026-08-16,pending,p@pending.pk
 R044,C141,nostatus.pk,SSL,12,2000,2025-08-17,2026-08-17,unknown,ns@nostatus.pk
 R045,C142,nospace.pk,Domain .pk,12,12000,2025-08-31,2026-08-31,active,sp@nospace.pk
 R046,C143,dollar.pk,SSL,12,,2025-09-02,2026-09-02,active,d@dollar.pk
-R047,C144,casing.pk,vps,12,24000,2025-08-05,2026-08-05,active,c@casing.pk
-R048,C114,edge-start.pk,Domain .pk,12,1500,2025-08-03,2026-08-03,active,e1@edge-start.pk
+R047,C144,casing.pk,VPS,12,24000,2025-08-05,2026-08-05,active,c@casing.pk
 R049,C101,example.com.pk,Domain .pk,12,3500,2025-08-11,2026-08-11,active,different@example.pk
 R050,C145,badmonth.pk,SSL,12,2000,,,active,bm@badmonth.pk

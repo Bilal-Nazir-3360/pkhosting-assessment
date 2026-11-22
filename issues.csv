@@ -1,42 +1,63 @@
 record_id,field,raw_value,problem,action_taken
+R001,contact_email,ali@example.pk,"customer C101 has several contact emails: ali@example.pk, different@example.pk","kept, flagged"
 R002,domain,HTTPS://WWW.Shop.com.pk/,normalised,changed to shop.com.pk
+R002,status,Active,normalised,changed to active
+R002,contact_email,Sara@Shop.com.pk,normalised,changed to sara@shop.com.pk
 R003,domain,  blog.pk. ,normalised,changed to blog.pk
-R004,registered_on,05/06/2025,ambiguous_date,assumed day-first
-R004,renews_on,05/06/2026,ambiguous_date,assumed day-first
+R003,status,ACTIVE,normalised,changed to active
+R003,contact_email,  omar@blog.pk,normalised,changed to omar@blog.pk
+R004,registered_on,05/06/2025,ambiguous_date,assumed day-first (both readings fit)
+R004,renews_on,05/06/2026,ambiguous_date,assumed day-first (both readings fit)
+R004,renews_on,2026-06-05,renewal date already passed but status is active,"kept, flagged"
+R004,record_id,R004 (news.pk),duplicate_record_id (different renewals share this id),"kept, flagged"
+R004,record_id,R004 (reused-id.pk),duplicate_record_id (different renewals share this id),"kept, flagged"
 R005,registered_on,31/02/2025,impossible date,left blank
 R005,renews_on,31/02/2026,impossible date,left blank
 R006,amount,"(2,500)",refund (parentheses),kept as parsed
-R006,registered_on,01/03/2026,ambiguous_date,assumed day-first
-R006,renews_on,01/03/2027,ambiguous_date,assumed day-first
+R006,registered_on,01/03/2026,ambiguous_date,assumed day-first (both readings fit)
+R006,renews_on,01/03/2027,ambiguous_date,assumed day-first (both readings fit)
 R007,amount,,blank amount,left blank
-R007,registered_on,10/08/2026,ambiguous_date,assumed day-first
-R007,renews_on,10/09/2026,ambiguous_date,assumed day-first
+R007,registered_on,10/08/2026,ambiguous_date,"resolved using the billing cycle, read as dmy"
+R007,renews_on,10/09/2026,ambiguous_date,"resolved using the billing cycle, read as dmy"
 R008,amount,USD 45,USD amount,"amount_pkr left blank, not converted"
+R009,amount_pkr,24000,conflicting_duplicate: R010 says 26000,"kept first row, flagged, excluded from headline total"
 R010,domain,DUP.PK,normalised,changed to dup.pk
+R010,row,R010,conflicting_duplicate of R009,"row dropped, amount logged"
 R011,domain,www.example.pk,normalised,changed to example.pk
+R011,row,R011,duplicate of R001,"row dropped, merged into R001"
+R012,status,Cancelled,normalised,changed to cancelled
+R013,status,canceled,normalised,changed to cancelled
 R015,contact_email,not-an-email,invalid email,left blank
-R017,registered_on,02/09/2025,ambiguous_date,assumed day-first
-R017,renews_on,02/09/2026,ambiguous_date,assumed day-first
+R015,renews_on,2026-09-01 -> 2025-09-01,renews_on not after registered_on,"kept, flagged"
+R015,renews_on,2025-09-01,renewal date already passed but status is active,"kept, flagged"
+R017,registered_on,02/09/2025,ambiguous_date,assumed day-first (both readings fit)
+R017,renews_on,02/09/2026,ambiguous_date,assumed day-first (both readings fit)
+R019,renews_on,2026-08-02,renewal date already passed but status is active,"kept, flagged"
+R020,billing_cycle,1 year,normalised,changed to 12
+R021,billing_cycle,Annual,normalised,changed to 12
+R022,billing_cycle,monthly,normalised,changed to 1
+R024,billing_cycle_months,12,cycle does not match dates (2026-02-10 to 2026-08-10),"kept, flagged"
 R025,amount,-1500,negative amount,kept as parsed
+R025,amount_pkr,-1500,"negative amount, status is not refunded","kept, flagged"
+R026,amount_pkr,0,zero amount,"kept, flagged"
+R027,amount_pkr,3500000,outlier amount,"kept, flagged"
 R031,domain,shop..com.pk,invalid domain (cannot encode),row dropped
 R032,domain,Café.pk,normalised,changed to xn--caf-dma.pk
 R033,contact_email,,blank email,left blank
 R034,customer_id,,blank customer_id,"kept, flagged"
+R035,renews_on,2026-03-15,renewal date already passed but status is active,"kept, flagged"
 R036,registered_on,29/02/2025,impossible date,left blank
-R036,renews_on,01/03/2026,ambiguous_date,assumed day-first
-R040,registered_on,01/09/25,ambiguous_date,assumed day-first
-R040,renews_on,01/09/26,ambiguous_date,assumed day-first
+R036,renews_on,01/03/2026,ambiguous_date,"resolved using the other date in the row, read as dmy"
+R036,renews_on,2026-03-01,renewal date already passed but status is active,"kept, flagged"
+R040,registered_on,01/09/25,ambiguous_date,assumed day-first (both readings fit)
+R040,renews_on,01/09/26,ambiguous_date,assumed day-first (both readings fit)
 R041,domain,http://api.hosting.pk:8080/login,normalised,changed to api.hosting.pk
+R042,status,Expired,normalised,changed to expired
 R044,status,,blank or unrecognised status,set to unknown
 R046,amount,$30,USD amount,"amount_pkr left blank, not converted"
+R047,status,Active,normalised,changed to active
+R047,service,vps,normalised,changed to VPS
+R048,row,R048,duplicate of R016,"row dropped, merged into R016"
+R049,contact_email,different@example.pk,"customer C101 has several contact emails: ali@example.pk, different@example.pk","kept, flagged"
 R050,registered_on,45/08/2025,impossible date,left blank
 R050,renews_on,45/08/2026,impossible date,left blank
-R004,renews_on,2026-06-05,renewal date already passed but status is active,"kept, flagged"
-R015,renews_on,2026-09-01 -> 2025-09-01,renews_on not after registered_on,"kept, flagged"
-R015,renews_on,2025-09-01,renewal date already passed but status is active,"kept, flagged"
-R019,renews_on,2026-08-02,renewal date already passed but status is active,"kept, flagged"
-R025,amount_pkr,-1500,"negative amount, status is not refunded","kept, flagged"
-R026,amount_pkr,0,zero amount,"kept, flagged"
-R027,amount_pkr,3500000,outlier amount,"kept, flagged"
-R035,renews_on,2026-03-15,renewal date already passed but status is active,"kept, flagged"
-R036,renews_on,2026-03-01,renewal date already passed but status is active,"kept, flagged"
