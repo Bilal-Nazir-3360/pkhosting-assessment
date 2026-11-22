@@ -1,6 +1,7 @@
 record_id,canonical_domain,renews_on,amount_pkr,bucket,reason
 R001,example.pk,2026-08-10,3500,included,counted
 R002,shop.com.pk,2026-08-15,18000,included,counted
+R005,old.pk,,3500,excluded,"no usable renewal date, cannot tell if it is in the window"
 R009,dup.pk,2026-08-20,24000,conflict,duplicate with two amounts
 R012,gone.pk,2026-08-25,9000,excluded,status is cancelled
 R013,gone2.pk,2026-08-26,9000,excluded,status is cancelled
@@ -31,3 +32,4 @@ R045,nospace.pk,2026-08-31,12000,included,counted
 R046,dollar.pk,2026-09-02,,excluded,no PKR amount (blank or USD)
 R047,casing.pk,2026-08-05,24000,included,counted
 R049,example.com.pk,2026-08-11,3500,included,counted
+R050,badmonth.pk,,2000,excluded,"no usable renewal date, cannot tell if it is in the window"

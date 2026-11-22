@@ -24,6 +24,20 @@ SERVICE_MAP = {"vps": "VPS", "shared hosting": "Shared Hosting",
                "domain .pk": "Domain .pk", "ssl": "SSL"}
 EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
+# Input header names we accept for each standard column (lowercase).
+ALIASES = {
+    "record_id": ["record_id", "id", "record"],
+    "customer_id": ["customer_id", "customer", "cust_id"],
+    "domain": ["domain", "domain_name", "domain name", "website"],
+    "service": ["service", "product", "plan"],
+    "billing_cycle": ["billing_cycle", "billing_cycle_months", "cycle", "billing cycle"],
+    "amount": ["amount", "amount_pkr", "price", "total"],
+    "registered_on": ["registered_on", "registered", "start_date", "created"],
+    "renews_on": ["renews_on", "renewal_date", "renews", "due_date", "expiry"],
+    "status": ["status", "state"],
+    "contact_email": ["contact_email", "email", "contact"],
+}
+
 
 # ---------------------------------------------------------------- parsers
 
@@ -436,8 +450,12 @@ def renewal_report(kept, conflict_ids):
     for c in kept:
         ren, amt, st = c["renews_on"], c["amount_pkr"], c["status"]
         rid, dom = c["record_id"], c["canonical_domain"]
-        if ren is None or not (WINDOW_START <= ren <= WINDOW_END):
-            continue   # no usable date (see issues.csv) or outside the window
+        if ren is None:
+            out.append((rid, dom, ren, amt, "excluded",
+                        "no usable renewal date, cannot tell if it is in the window"))
+            continue
+        if not (WINDOW_START <= ren <= WINDOW_END):
+            continue   # outside the window
         if amt is None:
             bucket, why = "excluded", "no PKR amount (blank or USD)"
         elif st == "suspended":
@@ -460,6 +478,25 @@ def renewal_report(kept, conflict_ids):
 
 # ----------------------------------------------------------------- output
 
+def normalise_headers(rows):
+    """Rename whatever headers the file uses to our standard names.
+
+    Returns (rows, missing_standard_columns).
+    """
+    if not rows:
+        return rows, []
+    found = {h.strip().lower(): h for h in rows[0].keys() if h}
+    mapping, missing = {}, []
+    for std, options in ALIASES.items():
+        hit = next((found[o] for o in options if o in found), None)
+        if hit:
+            mapping[hit] = std
+        else:
+            missing.append(std)
+    fixed = [{mapping.get(k, k): v for k, v in r.items()} for r in rows]
+    return fixed, missing
+
+
 def write_csv(path, fieldnames, rows):
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
@@ -469,8 +506,20 @@ def write_csv(path, fieldnames, rows):
 
 def main(path):
     issues = Issues()
-    with open(path, newline="", encoding="utf-8-sig") as f:   # utf-8-sig skips a BOM
-        rows = list(csv.DictReader(f))
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as f:   # utf-8-sig skips a BOM
+            rows = list(csv.DictReader(f))
+    except UnicodeDecodeError:
+        with open(path, newline="", encoding="cp1252") as f:
+            rows = list(csv.DictReader(f))
+        print("WARNING: file was not UTF-8, read it as cp1252")
+
+    rows, missing = normalise_headers(rows)
+    if missing:
+        print(f"WARNING: columns not found in the file: {', '.join(missing)}")
+    if {"domain", "renews_on"} & set(missing):
+        sys.exit("ERROR: cannot continue without a domain and renews_on column")
+
     cleaned = [clean_row(r, issues) for r in rows]
     kept = [c for c in cleaned if c]
 
@@ -515,10 +564,10 @@ def main(path):
     other = sum(conflict_ids[r[0]] for r in report if r[4] == "conflict")
     print(f"conflicting duplicate: Rs. {totals['conflict']:,} vs Rs. {other:,} (the two amounts)")
     print(f"outlier (excluded, needs checking): Rs. {totals['outlier']:,}")
-    write_csv("renewal_report.csv",
-              ["record_id", "canonical_domain", "renews_on", "amount_pkr", "bucket", "reason"],
-              [dict(zip(["record_id", "canonical_domain", "renews_on", "amount_pkr", "bucket", "reason"], r))
-               for r in report])
+
+    cols = ["record_id", "canonical_domain", "renews_on", "amount_pkr", "bucket", "reason"]
+    write_csv("renewal_report.csv", cols, [dict(zip(cols, r)) for r in report])
+
 
 if __name__ == "__main__":
     main(sys.argv[1])

@@ -106,8 +106,11 @@ it is a normal renewal that has not been paid yet.
 - Zero or negative amount (R025, R026): not a real renewal payment.
 - USD line (R046): no exchange rate was given, and I did not invent one.
 - Outlier (R027, Rs. 3,500,000): probably a data error. Listed separately to check.
-- Conflicting duplicate (R009 and R010): Rs. 24,000 or Rs. 26,000. If someone
-  confirms the right amount, the total goes up by that amount.
+- Conflicting duplicate (R009 and R010): Rs. 24,000 or Rs. 26,000. I cannot tell
+  which is right, so neither is in the headline. If someone confirms the amount,
+  the total goes up by that amount.
+- Rows whose renewal date could not be read (R005, R050): they cannot be placed in
+  the window, so they are excluded and listed in renewal_report.csv.
 
 **Shown separately:** suspended R014 (Rs. 30,000) is "at risk". It may come
 back, but I do not treat it as expected money.

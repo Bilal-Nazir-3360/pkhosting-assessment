@@ -1,8 +1,6 @@
 from datetime import date
-
 from clean import (parse_date, parse_money, parse_domain, parse_cycle,
-                   add_months, resolve_dates, Issues)
-
+                   add_months, resolve_dates, Issues, normalise_headers)
 
 # ------------------------------------------------------------------ dates
 
@@ -238,3 +236,8 @@ def test_cycle_monthly_and_quarterly():
 def test_cycle_unrecognised_and_blank():
     assert parse_cycle("") == (None, "blank cycle")
     assert parse_cycle("whenever") == (None, "unrecognised cycle")
+
+def test_header_aliases():
+    rows, missing = normalise_headers([{"Domain Name": "a.pk", "Email": "x@a.pk"}])
+    assert rows[0]["domain"] == "a.pk" and rows[0]["contact_email"] == "x@a.pk"
+    assert "renews_on" in missing
