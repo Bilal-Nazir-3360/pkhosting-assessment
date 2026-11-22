@@ -1,5 +1,6 @@
 import re
 from datetime import date
+import csv, sys
 
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun",
@@ -127,3 +128,113 @@ def parse_domain(raw):
                 or not re.fullmatch(r"[a-z0-9-]+", label)):
             return None, "invalid domain"
     return text, ""
+
+STATUS_MAP = {
+    "active": "active", "cancelled": "cancelled", "canceled": "cancelled",
+    "suspended": "suspended", "expired": "expired",
+    "pending": "pending", "refunded": "refunded",
+}
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
+class Issues:
+    """Every drop, change or flag goes through log(), so nothing is silent."""
+    def __init__(self):
+        self.rows = []
+
+    def log(self, record_id, field, raw_value, problem, action):
+        self.rows.append({"record_id": record_id, "field": field,
+                          "raw_value": raw_value, "problem": problem,
+                          "action_taken": action})
+
+
+def parse_cycle(raw):
+    """Return (months or None, note)."""
+    text = (raw or "").strip().lower()
+    if not text:
+        return None, "blank cycle"
+    if text.isdigit():
+        return int(text), ""
+    words = {
+        "annual": 12, "yearly": 12,
+        "monthly": 1,
+        "quarterly": 3,
+        "half year": 6, "half-year": 6, "halfyear": 6,
+        "semi-annual": 6, "semiannual": 6, "biannual": 6,
+    }
+    if text in words:
+        return words[text], ""
+    m = re.fullmatch(r"(\d+)\s*(year|yr|month|mo)s?", text)
+    if m:
+        n = int(m.group(1))
+        return (n * 12 if m.group(2) in ("year", "yr") else n), ""
+    return None, "unrecognised cycle"
+
+
+def clean_row(raw, issues):
+    """Return a clean dict, or None if the row is dropped."""
+    rid = (raw.get("record_id") or "").strip()
+
+    domain, note = parse_domain(raw.get("domain"))
+    if domain is None:
+        issues.log(rid, "domain", raw.get("domain"), note, "row dropped")
+        return None
+    if domain != (raw.get("domain") or "").strip():
+        issues.log(rid, "domain", raw.get("domain"), "normalised", f"changed to {domain}")
+
+    status_raw = (raw.get("status") or "").strip()
+    status = STATUS_MAP.get(status_raw.lower(), "unknown")
+    if status == "unknown":
+        issues.log(rid, "status", status_raw, "blank or unrecognised status", "set to unknown")
+
+    amount, currency, note = parse_money(raw.get("amount"))
+    if currency == "USD":
+        issues.log(rid, "amount", raw.get("amount"), "USD amount", "amount_pkr left blank, not converted")
+        amount = None
+    elif note:
+        issues.log(rid, "amount", raw.get("amount"), note, "kept as parsed" if amount is not None else "left blank")
+
+    dates = {}
+    for field in ("registered_on", "renews_on"):
+        d, ambiguous, note = parse_date(raw.get(field))
+        if d is None:
+            issues.log(rid, field, raw.get(field), note, "left blank")
+        elif ambiguous:
+            issues.log(rid, field, raw.get(field), "ambiguous_date", "assumed day-first")
+        dates[field] = d
+
+    months, note = parse_cycle(raw.get("billing_cycle"))
+    if months is None:
+        issues.log(rid, "billing_cycle", raw.get("billing_cycle"), note, "left blank")
+
+    email = (raw.get("contact_email") or "").strip().lower()
+    if email and not EMAIL_RE.fullmatch(email):
+        issues.log(rid, "contact_email", raw.get("contact_email"), "invalid email", "left blank")
+        email = ""
+    elif not email:
+        issues.log(rid, "contact_email", raw.get("contact_email"), "blank email", "left blank")
+
+    cust = (raw.get("customer_id") or "").strip()
+    if not cust:
+        issues.log(rid, "customer_id", raw.get("customer_id"), "blank customer_id", "kept, flagged")
+
+    return {
+        "record_id": rid, "customer_id": cust, "domain": domain,
+        "service": (raw.get("service") or "").strip(),
+        "billing_cycle_months": months, "amount_pkr": amount,
+        "registered_on": dates["registered_on"], "renews_on": dates["renews_on"],
+        "status": status, "contact_email": email,
+    }
+
+
+def main(path):
+    issues = Issues()
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        rows = list(csv.DictReader(f))
+    cleaned = [clean_row(r, issues) for r in rows]
+    kept = [c for c in cleaned if c]
+    print(f"rows in: {len(rows)}, kept: {len(kept)}, issues logged: {len(issues.rows)}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1])

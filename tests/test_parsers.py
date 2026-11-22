@@ -1,5 +1,5 @@
 from datetime import date
-from clean import parse_date, parse_money, parse_domain
+from clean import parse_date, parse_money, parse_domain, parse_cycle
 
 def test_day_first_certain():
     d, ambiguous, note = parse_date("25/12/2025")
@@ -109,3 +109,18 @@ def test_domain_double_dot_is_invalid():
 
 def test_domain_blank():
     assert parse_domain("") == (None, "blank domain")
+
+def test_cycle_half_year_variants():
+    assert parse_cycle("6") == (6, "")
+    assert parse_cycle("6 months") == (6, "")
+    assert parse_cycle("Half Year") == (6, "")
+
+
+def test_cycle_year_words():
+    assert parse_cycle("Annual") == (12, "")
+    assert parse_cycle("1 year") == (12, "")
+
+
+def test_cycle_unrecognised_and_blank():
+    assert parse_cycle("") == (None, "blank cycle")
+    assert parse_cycle("whenever") == (None, "unrecognised cycle")

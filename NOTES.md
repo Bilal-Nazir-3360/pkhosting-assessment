@@ -27,3 +27,36 @@ Two-digit years are read as 20xx, because PKHosting records are all from the 200
 - if a single "," or "." followed by exactly 3 digits is a thousands separator
   (PKR is whole rupees), so "1,200" and "1.200" both mean 1200.
 - If both appear, the last one is the decimal separator ("1.200,00" = 1200.00).
+
+
+## Rules
+
+**Status set:** active, cancelled, suspended, expired, pending, refunded, unknown.
+"canceled" maps to "cancelled". Blank or unrecognised becomes "unknown" and is flagged.
+
+**Billing cycle:** 
+converted to whole months. 12, "1 year" and "Annual" = 12;
+"6 months", "half year" and "semi-annual" = 6; 
+"quarterly" = 3; 
+"monthly" = 1.
+
+A blank cycle is inferred from the two dates and flagged. A cycle that disagrees
+with the date gap is flagged, not corrected. Anything else is flagged as unrecognised.
+
+**Dropped vs flagged:** 
+dropped = not in clean.csv. 
+flagged = in clean.csv with at least one row in issues.csv.
+
+**Dedupe:**
+two rows are the same renewal if they share (canonical domain, service,renews_on). 
+Identical amounts: the later row is dropped and logged as a merge.
+Different amounts (R009/R010): the first row is kept, flagged as
+conflicting_duplicate with both amounts logged, and left out of the headline total
+because we cannot tell which amount is right. The total changes by 24,000 to 26,000.
+
+**Renewal total (2026-08-03 to 2026-09-02, inclusive):**
+- Cancelled, expired: excluded (will not renew).
+- Suspended: excluded from the headline, shown separately as at risk.
+- Refund (R006): excluded, since it is money out, not a renewal due.
+- USD line (R008): excluded from the PKR total, shown separately. No exchange rate was supplied, so I did not invent one.
+- Ambiguous dates: total shown with and without them.
