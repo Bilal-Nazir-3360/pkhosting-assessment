@@ -1,4 +1,5 @@
 .venv/
 __pycache__/
 .pytest_cache/
-cache/
+probe*.py
+probe_page.html
