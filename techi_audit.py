@@ -1,6 +1,7 @@
 """Polite metadata reader for TECHi.com (Part B)."""
 import json
 import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -8,6 +9,9 @@ from bs4 import BeautifulSoup
 
 # Rule: a month is 30 days and a year is 365 days. The site only says
 # "2 months ago", so an exact calendar answer is not possible.
+USER_AGENT = "TechAboutAssessmentBot/1.0 (bachohan786@gmail.com)"
+SITE_HOST = "www.techi.com"
+POST_SITEMAP_RE = re.compile(r"^post-sitemap\d*\.xml$")
 UNIT_DAYS = {"week": 7, "month": 30, "year": 365}
 
 RELATIVE_RE = re.compile(
@@ -144,3 +148,55 @@ def extract_article(url, html, fetched_at):
         "date_text": date_text,
         "date_iso": date_iso or "",
     }
+def parse_sitemap(xml_text):
+    """Return the page URLs of a <urlset> or the sitemap URLs of a <sitemapindex>.
+
+    Only <loc> inside <url> or <sitemap> counts. The <image:loc> inside
+    <image:image> is skipped. Bad XML gives an empty list.
+    """
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+    urls = []
+    for entry in root:
+        if entry.tag.split("}")[-1] not in ("url", "sitemap"):
+            continue
+        for child in entry:
+            if child.tag.split("}")[-1] == "loc" and child.text:
+                urls.append(child.text.strip())
+    return urls
+
+
+def is_post_sitemap(url):
+    """True for post-sitemap1.xml, post-sitemap12.xml and so on."""
+    name = urlparse(url).path.rsplit("/", 1)[-1]
+    return bool(POST_SITEMAP_RE.match(name))
+
+
+def is_article_url(url):
+    """True if the URL is on techi.com with exactly one path segment."""
+    parts = urlparse(url)
+    segments = [part for part in parts.path.split("/") if part]
+    return parts.netloc == SITE_HOST and len(segments) == 1
+
+
+def article_urls(urls):
+    """Keep article-looking URLs, drop duplicates, keep the sitemap order."""
+    seen = set()
+    result = []
+    for url in urls:
+        if is_article_url(url) and url not in seen:
+            seen.add(url)
+            result.append(url)
+    return result
+
+
+def sitemap_lines_from_robots(robots_text):
+    """Return the URLs on 'Sitemap:' lines of a robots.txt text."""
+    found = []
+    for line in robots_text.splitlines():
+        match = re.match(r"\s*sitemap\s*:\s*(\S+)", line, re.IGNORECASE)
+        if match:
+            found.append(match.group(1))
+    return found
