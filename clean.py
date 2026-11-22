@@ -6,8 +6,10 @@ from collections import Counter, defaultdict
 from datetime import date
 
 TODAY = date(2026, 8, 3)   # the brief says to treat today as 2026-08-03
+WINDOW_START, WINDOW_END = date(2026, 8, 3), date(2026, 9, 2)   # inclusive
 YEAR_MIN, YEAR_MAX = 2000, 2035
 OUTLIER_PKR = 1_000_000    # assumption: no single renewal above this is normal
+COUNTED = {"active", "pending"}   # statuses that count toward the headline total
 
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun",
@@ -298,8 +300,12 @@ def clean_row(raw, issues):
     if months is not None and cycle_raw != str(months):
         issues.log(rid, "billing_cycle", cycle_raw, "normalised", f"changed to {months}")
 
+    n_before = len(issues.rows)
     reg, ren = resolve_dates(rid, raw.get("registered_on"),
                              raw.get("renews_on"), months, issues)
+    # True if either date had to be guessed (both readings fit)
+    date_guess = any("both readings" in r["action_taken"]
+                     for r in issues.rows[n_before:])
 
     if months is None:
         inferred = months_between(reg, ren) if reg and ren else None
@@ -330,6 +336,7 @@ def clean_row(raw, issues):
         "billing_cycle_months": months, "amount_pkr": amount,
         "registered_on": reg, "renews_on": ren,
         "status": status, "contact_email": email,
+        "_date_guess": date_guess,   # helper only, not written to clean.csv
     }
 
 
@@ -421,11 +428,41 @@ def check_customers(kept, issues):
                            "kept, flagged")
 
 
+# --------------------------------------------------------- renewal report
+
+def renewal_report(kept, conflict_ids):
+    """Return a list of (record_id, domain, renews_on, amount, bucket, reason)."""
+    out = []
+    for c in kept:
+        ren, amt, st = c["renews_on"], c["amount_pkr"], c["status"]
+        rid, dom = c["record_id"], c["canonical_domain"]
+        if ren is None or not (WINDOW_START <= ren <= WINDOW_END):
+            continue   # no usable date (see issues.csv) or outside the window
+        if amt is None:
+            bucket, why = "excluded", "no PKR amount (blank or USD)"
+        elif st == "suspended":
+            bucket, why = "at_risk", "suspended, may be reinstated"
+        elif st not in COUNTED:
+            bucket, why = "excluded", f"status is {st}"
+        elif amt <= 0:
+            bucket, why = "excluded", "zero or negative amount"
+        elif amt > OUTLIER_PKR:
+            bucket, why = "outlier", "amount above Rs. 1,000,000, needs checking"
+        elif rid in conflict_ids:
+            bucket, why = "conflict", "duplicate with two amounts"
+        elif c["_date_guess"]:
+            bucket, why = "included_ambiguous", "included, but date was a guess"
+        else:
+            bucket, why = "included", "counted"
+        out.append((rid, dom, ren, amt, bucket, why))
+    return out
+
+
 # ----------------------------------------------------------------- output
 
 def write_csv(path, fieldnames, rows):
     with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
 
@@ -462,6 +499,21 @@ def main(path):
     print("totals by status:")
     for status, n in sorted(Counter(c["status"] for c in kept).items()):
         print(f"  {status}: {n}")
+
+    # Renewal total for the window (rules are in NOTES.md)
+    report = renewal_report(kept, conflict_ids)
+    totals = defaultdict(int)
+    print(f"\nrenewals due {WINDOW_START} to {WINDOW_END}:")
+    for rid, dom, ren, amt, bucket, why in report:
+        totals[bucket] += amt or 0
+        print(f"  {bucket:18} {rid} {dom} {ren} {amt}  ({why})")
+    sure = totals["included"]
+    with_amb = sure + totals["included_ambiguous"]
+    print(f"headline total (certain dates): Rs. {sure:,}")
+    print(f"total including guessed dates:  Rs. {with_amb:,}")
+    print(f"at risk (suspended): Rs. {totals['at_risk']:,}")
+    print(f"conflicting duplicate: Rs. {totals['conflict']:,}")
+    print(f"outlier (excluded, needs checking): Rs. {totals['outlier']:,}")
 
 
 if __name__ == "__main__":
