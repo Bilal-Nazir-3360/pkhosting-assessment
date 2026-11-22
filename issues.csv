@@ -1,0 +1,33 @@
+record_id,field,raw_value,problem,action_taken
+R002,domain,HTTPS://WWW.Shop.com.pk/,normalised,changed to shop.com.pk
+R003,domain,  blog.pk. ,normalised,changed to blog.pk
+R004,registered_on,05/06/2025,ambiguous_date,assumed day-first
+R004,renews_on,05/06/2026,ambiguous_date,assumed day-first
+R005,registered_on,31/02/2025,impossible date,left blank
+R005,renews_on,31/02/2026,impossible date,left blank
+R006,amount,"(2,500)",refund (parentheses),kept as parsed
+R006,registered_on,01/03/2026,ambiguous_date,assumed day-first
+R006,renews_on,01/03/2027,ambiguous_date,assumed day-first
+R007,amount,,blank amount,left blank
+R007,registered_on,10/08/2026,ambiguous_date,assumed day-first
+R007,renews_on,10/09/2026,ambiguous_date,assumed day-first
+R008,amount,USD 45,USD amount,"amount_pkr left blank, not converted"
+R010,domain,DUP.PK,normalised,changed to dup.pk
+R011,domain,www.example.pk,normalised,changed to example.pk
+R015,contact_email,not-an-email,invalid email,left blank
+R017,registered_on,02/09/2025,ambiguous_date,assumed day-first
+R017,renews_on,02/09/2026,ambiguous_date,assumed day-first
+R025,amount,-1500,negative amount,kept as parsed
+R031,domain,shop..com.pk,invalid domain (cannot encode),row dropped
+R032,domain,Café.pk,normalised,changed to xn--caf-dma.pk
+R033,contact_email,,blank email,left blank
+R034,customer_id,,blank customer_id,"kept, flagged"
+R036,registered_on,29/02/2025,impossible date,left blank
+R036,renews_on,01/03/2026,ambiguous_date,assumed day-first
+R040,registered_on,01/09/25,ambiguous_date,assumed day-first
+R040,renews_on,01/09/26,ambiguous_date,assumed day-first
+R041,domain,http://api.hosting.pk:8080/login,normalised,changed to api.hosting.pk
+R044,status,,blank or unrecognised status,set to unknown
+R046,amount,$30,USD amount,"amount_pkr left blank, not converted"
+R050,registered_on,45/08/2025,impossible date,left blank
+R050,renews_on,45/08/2026,impossible date,left blank

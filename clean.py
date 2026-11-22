@@ -1,6 +1,7 @@
 import re
 from datetime import date
 import csv, sys
+from collections import Counter
 
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun",
@@ -227,13 +228,37 @@ def clean_row(raw, issues):
     }
 
 
+def write_csv(path, fieldnames, rows):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        w.writerows(rows)
+
+
 def main(path):
     issues = Issues()
     with open(path, newline="", encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     cleaned = [clean_row(r, issues) for r in rows]
     kept = [c for c in cleaned if c]
-    print(f"rows in: {len(rows)}, kept: {len(kept)}, issues logged: {len(issues.rows)}")
+
+    write_csv("issues.csv",
+              ["record_id", "field", "raw_value", "problem", "action_taken"],
+              issues.rows)
+    write_csv("clean.csv",
+              ["record_id", "customer_id", "domain", "service",
+               "billing_cycle_months", "amount_pkr", "registered_on",
+               "renews_on", "status", "contact_email"],
+              kept)
+
+    flagged_ids = {i["record_id"] for i in issues.rows}
+    kept_flagged = [c for c in kept if c["record_id"] in flagged_ids]
+    print(f"rows in: {len(rows)}")
+    print(f"kept: {len(kept)}  (of which flagged: {len(kept_flagged)})")
+    print(f"dropped: {len(rows) - len(kept)}")
+    print("totals by status:")
+    for status, n in sorted(Counter(c["status"] for c in kept).items()):
+        print(f"  {status}: {n}")
 
 
 if __name__ == "__main__":

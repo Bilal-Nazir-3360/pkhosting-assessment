@@ -1,0 +1,50 @@
+record_id,customer_id,domain,service,billing_cycle_months,amount_pkr,registered_on,renews_on,status,contact_email
+R001,C101,example.pk,Domain .pk,12,3500.0,2025-08-10,2026-08-10,active,ali@example.pk
+R002,C102,shop.com.pk,Shared Hosting,12,18000.0,2025-08-15,2026-08-15,active,sara@shop.com.pk
+R003,C103,blog.pk,VPS,12,42000.0,2025-12-25,2026-12-25,active,omar@blog.pk
+R004,C104,news.pk,SSL,12,1200.0,2025-06-05,2026-06-05,active,n@news.pk
+R005,C105,old.pk,Domain .pk,12,3500.0,,,active,x@old.pk
+R006,C106,refund.pk,Shared Hosting,12,-2500.0,2026-03-01,2027-03-01,refunded,r@refund.pk
+R007,C107,blank.pk,VPS,1,,2026-08-10,2026-09-10,active,b@blank.pk
+R008,C108,usd.pk,SSL,12,,2026-08-20,2027-08-20,active,u@usd.pk
+R009,C109,dup.pk,VPS,12,24000.0,2025-08-20,2026-08-20,active,d@dup.pk
+R010,C109,dup.pk,VPS,12,26000.0,2025-08-20,2026-08-20,active,d@dup.pk
+R011,C101,example.pk,Domain .pk,12,3500.0,2025-08-10,2026-08-10,active,ali@example.pk
+R012,C110,gone.pk,Shared Hosting,12,9000.0,2025-08-25,2026-08-25,cancelled,g@gone.pk
+R013,C111,gone2.pk,Shared Hosting,12,9000.0,2025-08-26,2026-08-26,cancelled,g@gone2.pk
+R014,C112,susp.pk,VPS,12,30000.0,2025-09-01,2026-09-01,suspended,s@susp.pk
+R015,C113,backwards.pk,SSL,12,2000.0,2026-09-01,2025-09-01,active,
+R016,C114,edge-start.pk,Domain .pk,12,1500.0,2025-08-03,2026-08-03,active,e1@edge-start.pk
+R017,C115,edge-end.pk,Shared Hosting,12,6000.0,2025-09-02,2026-09-02,active,e2@edge-end.pk
+R018,C116,after-window.pk,SSL,12,2200.0,2025-09-03,2026-09-03,active,e3@after-window.pk
+R019,C117,before-window.pk,SSL,12,2200.0,2025-08-02,2026-08-02,active,e4@before-window.pk
+R020,C118,oneyear.pk,VPS,12,20000.0,2025-08-12,2026-08-12,active,o@oneyear.pk
+R021,C119,annual.pk,VPS,12,20000.0,2025-08-13,2026-08-13,active,a@annual.pk
+R022,C120,monthly.pk,Shared Hosting,1,800.0,2026-07-15,2026-08-15,active,m@monthly.pk
+R023,C121,quarterly.pk,Shared Hosting,3,2400.0,2026-05-20,2026-08-20,active,q@quarterly.pk
+R024,C122,mismatch.pk,VPS,12,15000.0,2026-02-10,2026-08-10,active,mm@mismatch.pk
+R025,C123,negative.pk,SSL,12,-1500.0,2025-08-18,2026-08-18,active,neg@negative.pk
+R026,C124,zero.pk,SSL,12,0.0,2025-08-19,2026-08-19,active,z@zero.pk
+R027,C125,outlier.pk,VPS,12,3500000.0,2025-08-21,2026-08-21,active,big@outlier.pk
+R028,C126,slash-dash.pk,Domain .pk,12,1200.0,2025-08-22,2026-08-22,active,sd@slash-dash.pk
+R029,C127,euro.pk,Domain .pk,12,1200.0,2025-08-23,2026-08-23,active,eu@euro.pk
+R004,C128,reused-id.pk,VPS,12,9500.0,2025-08-24,2026-08-24,active,ri@reused-id.pk
+R032,C130,xn--caf-dma.pk,Domain .pk,12,3500.0,2025-08-28,2026-08-28,active,cafe@cafe.pk
+R033,C131,noemail.pk,SSL,12,2000.0,2025-08-29,2026-08-29,active,
+R034,,nocustomer.pk,SSL,12,2000.0,2025-08-30,2026-08-30,active,nc@nocustomer.pk
+R035,C132,lapsed.pk,VPS,12,25000.0,2025-03-15,2026-03-15,active,l@lapsed.pk
+R036,C133,leapbad.pk,Domain .pk,12,3500.0,,2026-03-01,active,lb@leapbad.pk
+R037,C134,leapok.pk,Domain .pk,36,10000.0,2024-02-29,2027-02-28,active,lo@leapok.pk
+R038,C135,textdate.pk,Shared Hosting,12,6500.0,2025-08-03,2026-08-03,active,td@textdate.pk
+R039,C136,slashiso.pk,Shared Hosting,12,6500.0,2025-09-01,2026-09-01,active,si@slashiso.pk
+R040,C137,twodigit.pk,SSL,12,2500.0,2025-09-01,2026-09-01,active,tw@twodigit.pk
+R041,C138,api.hosting.pk,VPS,12,28000.0,2025-08-14,2026-08-14,active,api@hosting.pk
+R042,C139,expired.pk,Domain .pk,12,3500.0,2025-06-01,2026-06-01,expired,ex@expired.pk
+R043,C140,pending.pk,SSL,12,2000.0,2025-08-16,2026-08-16,pending,p@pending.pk
+R044,C141,nostatus.pk,SSL,12,2000.0,2025-08-17,2026-08-17,unknown,ns@nostatus.pk
+R045,C142,nospace.pk,Domain .pk,12,12000.0,2025-08-31,2026-08-31,active,sp@nospace.pk
+R046,C143,dollar.pk,SSL,12,,2025-09-02,2026-09-02,active,d@dollar.pk
+R047,C144,casing.pk,vps,12,24000.0,2025-08-05,2026-08-05,active,c@casing.pk
+R048,C114,edge-start.pk,Domain .pk,12,1500.0,2025-08-03,2026-08-03,active,e1@edge-start.pk
+R049,C101,example.com.pk,Domain .pk,12,3500.0,2025-08-11,2026-08-11,active,different@example.pk
+R050,C145,badmonth.pk,SSL,12,2000.0,,,active,bm@badmonth.pk
