@@ -237,6 +237,8 @@ def test_cycle_unrecognised_and_blank():
     assert parse_cycle("") == (None, "blank cycle")
     assert parse_cycle("whenever") == (None, "unrecognised cycle")
 
+
+ 
 def test_header_aliases():
     rows, missing = normalise_headers([{"Domain Name": "a.pk", "Email": "x@a.pk"}])
     assert rows[0]["domain"] == "a.pk" and rows[0]["contact_email"] == "x@a.pk"
