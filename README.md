@@ -44,12 +44,21 @@ The 4 dropped rows are R031 (bad domain), R011 and R048 (exact duplicates), and 
 
 ## Files
 
+Part A:
 - `clean.py`: the whole cleaning script
 - `renewals_sample.csv`: my made-up input
 - `clean.csv`, `issues.csv`, `renewal_report.csv`: the output
-- `tests/test_parsers.py`: the tests
 - `NOTES.md`: my rules and the renewal total, with reasons
-- `pytest.ini`: lets the tests import `clean.py`
+
+Part B:
+- `techi_audit.py`: the TECHi reader
+- `techi_articles.csv`: the output
+- `cache/`: saved pages, so a rerun works offline
+
+Both parts:
+- `tests/`: all the tests (`test_parsers.py` is Part A, the others are Part B)
+- `pytest.ini`: lets the tests import my scripts
+- `requirements.txt`: the packages I used
 
 ## How it works
 
