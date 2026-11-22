@@ -1,0 +1,33 @@
+record_id,canonical_domain,renews_on,amount_pkr,bucket,reason
+R001,example.pk,2026-08-10,3500,included,counted
+R002,shop.com.pk,2026-08-15,18000,included,counted
+R009,dup.pk,2026-08-20,24000,conflict,duplicate with two amounts
+R012,gone.pk,2026-08-25,9000,excluded,status is cancelled
+R013,gone2.pk,2026-08-26,9000,excluded,status is cancelled
+R014,susp.pk,2026-09-01,30000,at_risk,"suspended, may be reinstated"
+R016,edge-start.pk,2026-08-03,1500,included,counted
+R017,edge-end.pk,2026-09-02,6000,included_ambiguous,"included, but date was a guess"
+R020,oneyear.pk,2026-08-12,20000,included,counted
+R021,annual.pk,2026-08-13,20000,included,counted
+R022,monthly.pk,2026-08-15,800,included,counted
+R023,quarterly.pk,2026-08-20,2400,included,counted
+R024,mismatch.pk,2026-08-10,15000,included,counted
+R025,negative.pk,2026-08-18,-1500,excluded,zero or negative amount
+R026,zero.pk,2026-08-19,0,excluded,zero or negative amount
+R027,outlier.pk,2026-08-21,3500000,outlier,"amount above Rs. 1,000,000, needs checking"
+R028,slash-dash.pk,2026-08-22,1200,included,counted
+R029,euro.pk,2026-08-23,1200,included,counted
+R004,reused-id.pk,2026-08-24,9500,included,counted
+R032,xn--caf-dma.pk,2026-08-28,3500,included,counted
+R033,noemail.pk,2026-08-29,2000,included,counted
+R034,nocustomer.pk,2026-08-30,2000,included,counted
+R038,textdate.pk,2026-08-03,6500,included,counted
+R039,slashiso.pk,2026-09-01,6500,included,counted
+R040,twodigit.pk,2026-09-01,2500,included_ambiguous,"included, but date was a guess"
+R041,api.hosting.pk,2026-08-14,28000,included,counted
+R043,pending.pk,2026-08-16,2000,included,counted
+R044,nostatus.pk,2026-08-17,2000,excluded,status is unknown
+R045,nospace.pk,2026-08-31,12000,included,counted
+R046,dollar.pk,2026-09-02,,excluded,no PKR amount (blank or USD)
+R047,casing.pk,2026-08-05,24000,included,counted
+R049,example.com.pk,2026-08-11,3500,included,counted

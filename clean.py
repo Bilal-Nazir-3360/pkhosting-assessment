@@ -388,7 +388,7 @@ def dedupe(kept, issues):
 
     # 2. Duplicate renewals: same (domain, service, renews_on).
     seen = {}
-    out, conflicts = [], set()
+    out, conflicts = [], {}
     for c in kept:
         if c["renews_on"] is None:      # no date, so we cannot safely match it
             out.append(c)
@@ -403,7 +403,7 @@ def dedupe(kept, issues):
                        f"duplicate of {first['record_id']}",
                        f"row dropped, merged into {first['record_id']}")
         else:
-            conflicts.add(first["record_id"])
+            conflicts[first["record_id"]] = c["amount_pkr"]
             issues.log(first["record_id"], "amount_pkr", str(first["amount_pkr"]),
                        f"conflicting_duplicate: {c['record_id']} says {c['amount_pkr']}",
                        "kept first row, flagged, excluded from headline total")
@@ -512,9 +512,13 @@ def main(path):
     print(f"headline total (certain dates): Rs. {sure:,}")
     print(f"total including guessed dates:  Rs. {with_amb:,}")
     print(f"at risk (suspended): Rs. {totals['at_risk']:,}")
-    print(f"conflicting duplicate: Rs. {totals['conflict']:,}")
+    other = sum(conflict_ids[r[0]] for r in report if r[4] == "conflict")
+    print(f"conflicting duplicate: Rs. {totals['conflict']:,} vs Rs. {other:,} (the two amounts)")
     print(f"outlier (excluded, needs checking): Rs. {totals['outlier']:,}")
-
+    write_csv("renewal_report.csv",
+              ["record_id", "canonical_domain", "renews_on", "amount_pkr", "bucket", "reason"],
+              [dict(zip(["record_id", "canonical_domain", "renews_on", "amount_pkr", "bucket", "reason"], r))
+               for r in report])
 
 if __name__ == "__main__":
     main(sys.argv[1])
