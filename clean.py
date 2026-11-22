@@ -1,12 +1,26 @@
+import csv
 import re
-from datetime import date
-import csv, sys
+import sys
 from collections import Counter
+from datetime import date
+
+TODAY = date(2026, 8, 3)   # the brief says to treat today as 2026-08-03
+YEAR_MIN, YEAR_MAX = 2000, 2035
+OUTLIER_PKR = 1_000_000    # assumption: no single renewal above this is normal
 
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun",
      "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
 
+STATUS_MAP = {
+    "active": "active", "cancelled": "cancelled", "canceled": "cancelled",
+    "suspended": "suspended", "expired": "expired",
+    "pending": "pending", "refunded": "refunded",
+}
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
+# ---------------------------------------------------------------- parsers
 
 def _make_date(year, month, day):
     """Return a date, or None if it isn't a real calendar date."""
@@ -54,6 +68,7 @@ def parse_date(raw):
         return None, False, "impossible date"
     return result, False, ""
 
+
 def parse_money(raw):
     """Parse an amount string. Returns (amount or None, currency or None, note)."""
     text = (raw or "").strip()
@@ -68,8 +83,6 @@ def parse_money(raw):
     negative = in_parens or text.startswith("-")
 
     # 3. Keep only digits, commas and dots, then trim stray ones.
-    #    This removes "Rs.", "PKR", "₨", "/-" and spaces. The strip handles
-    #    the leftover dot from "Rs." so "Rs.12000" becomes "12000".
     num = re.sub(r"[^\d.,]", "", text).strip(".,")
     if not any(c.isdigit() for c in num):
         return None, None, "no number found"
@@ -101,6 +114,7 @@ def parse_money(raw):
         note = "refund (parentheses)" if in_parens else "negative amount"
     return value, currency, note
 
+
 def parse_domain(raw):
     """Return (canonical domain or None, note)."""
     text = (raw or "").strip().lower()
@@ -117,7 +131,7 @@ def parse_domain(raw):
     if not text or "." not in text:
         return None, "invalid domain (no dot)"
 
-    # Non-ASCII (e.g. cafe with an accent): convert to punycode, the form DNS uses.
+    # Non-ASCII (e.g. an accented letter): convert to punycode, the form DNS uses.
     try:
         text = text.encode("idna").decode("ascii")
     except UnicodeError:
@@ -129,24 +143,6 @@ def parse_domain(raw):
                 or not re.fullmatch(r"[a-z0-9-]+", label)):
             return None, "invalid domain"
     return text, ""
-
-STATUS_MAP = {
-    "active": "active", "cancelled": "cancelled", "canceled": "cancelled",
-    "suspended": "suspended", "expired": "expired",
-    "pending": "pending", "refunded": "refunded",
-}
-EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
-
-
-class Issues:
-    """Every drop, change or flag goes through log(), so nothing is silent."""
-    def __init__(self):
-        self.rows = []
-
-    def log(self, record_id, field, raw_value, problem, action):
-        self.rows.append({"record_id": record_id, "field": field,
-                          "raw_value": raw_value, "problem": problem,
-                          "action_taken": action})
 
 
 def parse_cycle(raw):
@@ -172,6 +168,22 @@ def parse_cycle(raw):
     return None, "unrecognised cycle"
 
 
+# ------------------------------------------------------------ issues log
+
+class Issues:
+    """Every drop, change or flag goes through log(), so nothing is silent."""
+
+    def __init__(self):
+        self.rows = []
+
+    def log(self, record_id, field, raw_value, problem, action):
+        self.rows.append({"record_id": record_id, "field": field,
+                          "raw_value": raw_value, "problem": problem,
+                          "action_taken": action})
+
+
+# ------------------------------------------------------------- row logic
+
 def clean_row(raw, issues):
     """Return a clean dict, or None if the row is dropped."""
     rid = (raw.get("record_id") or "").strip()
@@ -190,10 +202,14 @@ def clean_row(raw, issues):
 
     amount, currency, note = parse_money(raw.get("amount"))
     if currency == "USD":
-        issues.log(rid, "amount", raw.get("amount"), "USD amount", "amount_pkr left blank, not converted")
+        issues.log(rid, "amount", raw.get("amount"), "USD amount",
+                   "amount_pkr left blank, not converted")
         amount = None
     elif note:
-        issues.log(rid, "amount", raw.get("amount"), note, "kept as parsed" if amount is not None else "left blank")
+        issues.log(rid, "amount", raw.get("amount"), note,
+                   "kept as parsed" if amount is not None else "left blank")
+    if amount is not None and amount == int(amount):
+        amount = int(amount)   # whole rupees print as 3500, not 3500.0
 
     dates = {}
     for field in ("registered_on", "renews_on"):
@@ -220,13 +236,43 @@ def clean_row(raw, issues):
         issues.log(rid, "customer_id", raw.get("customer_id"), "blank customer_id", "kept, flagged")
 
     return {
-        "record_id": rid, "customer_id": cust, "domain": domain,
+        "record_id": rid, "customer_id": cust, "canonical_domain": domain,
         "service": (raw.get("service") or "").strip(),
         "billing_cycle_months": months, "amount_pkr": amount,
         "registered_on": dates["registered_on"], "renews_on": dates["renews_on"],
         "status": status, "contact_email": email,
     }
 
+
+def check_row(c, issues):
+    """Per-row sanity checks. Flags only, never changes or drops."""
+    rid = c["record_id"]
+    reg, ren = c["registered_on"], c["renews_on"]
+
+    for field, d in (("registered_on", reg), ("renews_on", ren)):
+        if d and not (YEAR_MIN <= d.year <= YEAR_MAX):
+            issues.log(rid, field, str(d), "implausible_year", "kept, flagged")
+
+    if reg and ren and ren <= reg:
+        issues.log(rid, "renews_on", f"{reg} -> {ren}",
+                   "renews_on not after registered_on", "kept, flagged")
+
+    amt = c["amount_pkr"]
+    if amt is not None:
+        if amt == 0:
+            issues.log(rid, "amount_pkr", str(amt), "zero amount", "kept, flagged")
+        elif amt < 0 and c["status"] != "refunded":
+            issues.log(rid, "amount_pkr", str(amt),
+                       "negative amount, status is not refunded", "kept, flagged")
+        elif amt > OUTLIER_PKR:
+            issues.log(rid, "amount_pkr", str(amt), "outlier amount", "kept, flagged")
+
+    if ren and ren < TODAY and c["status"] == "active":
+        issues.log(rid, "renews_on", str(ren),
+                   "renewal date already passed but status is active", "kept, flagged")
+
+
+# ----------------------------------------------------------------- output
 
 def write_csv(path, fieldnames, rows):
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -237,16 +283,19 @@ def write_csv(path, fieldnames, rows):
 
 def main(path):
     issues = Issues()
-    with open(path, newline="", encoding="utf-8-sig") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:   # utf-8-sig skips a BOM
         rows = list(csv.DictReader(f))
     cleaned = [clean_row(r, issues) for r in rows]
     kept = [c for c in cleaned if c]
+
+    for c in kept:
+        check_row(c, issues)
 
     write_csv("issues.csv",
               ["record_id", "field", "raw_value", "problem", "action_taken"],
               issues.rows)
     write_csv("clean.csv",
-              ["record_id", "customer_id", "domain", "service",
+              ["record_id", "customer_id", "canonical_domain", "service",
                "billing_cycle_months", "amount_pkr", "registered_on",
                "renews_on", "status", "contact_email"],
               kept)

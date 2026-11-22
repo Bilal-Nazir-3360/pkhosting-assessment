@@ -31,3 +31,12 @@ R044,status,,blank or unrecognised status,set to unknown
 R046,amount,$30,USD amount,"amount_pkr left blank, not converted"
 R050,registered_on,45/08/2025,impossible date,left blank
 R050,renews_on,45/08/2026,impossible date,left blank
+R004,renews_on,2026-06-05,renewal date already passed but status is active,"kept, flagged"
+R015,renews_on,2026-09-01 -> 2025-09-01,renews_on not after registered_on,"kept, flagged"
+R015,renews_on,2025-09-01,renewal date already passed but status is active,"kept, flagged"
+R019,renews_on,2026-08-02,renewal date already passed but status is active,"kept, flagged"
+R025,amount_pkr,-1500,"negative amount, status is not refunded","kept, flagged"
+R026,amount_pkr,0,zero amount,"kept, flagged"
+R027,amount_pkr,3500000,outlier amount,"kept, flagged"
+R035,renews_on,2026-03-15,renewal date already passed but status is active,"kept, flagged"
+R036,renews_on,2026-03-01,renewal date already passed but status is active,"kept, flagged"
