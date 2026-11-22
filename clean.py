@@ -1,7 +1,8 @@
+import calendar
 import csv
 import re
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date
 
 TODAY = date(2026, 8, 3)   # the brief says to treat today as 2026-08-03
@@ -17,6 +18,8 @@ STATUS_MAP = {
     "suspended": "suspended", "expired": "expired",
     "pending": "pending", "refunded": "refunded",
 }
+SERVICE_MAP = {"vps": "VPS", "shared hosting": "Shared Hosting",
+               "domain .pk": "Domain .pk", "ssl": "SSL"}
 EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
@@ -30,8 +33,12 @@ def _make_date(year, month, day):
         return None
 
 
-def parse_date(raw):
-    """Parse a date string. Returns (date or None, was_ambiguous, note)."""
+def parse_date(raw, order=None):
+    """Parse a date string. Returns (date or None, was_ambiguous, note).
+
+    order may force "dmy" or "mdy" for slash dates; it is decided by the
+    caller from the rest of the row (see resolve_dates).
+    """
     text = (raw or "").strip()
 
     # Year first: YYYY-MM-DD or YYYY/MM/DD. Order is certain.
@@ -59,6 +66,10 @@ def parse_date(raw):
 
     day_first = _make_date(year, b, a)     # a is the day, b is the month
     month_first = _make_date(year, a, b)   # a is the month, b is the day
+    if order == "dmy":
+        month_first = None
+    elif order == "mdy":
+        day_first = None
 
     if day_first and month_first and day_first != month_first:
         return day_first, True, "ambiguous, assumed day-first"
@@ -182,23 +193,94 @@ class Issues:
                           "action_taken": action})
 
 
+# ----------------------------------------------------------- date helpers
+
+def add_months(d, n):
+    """d plus n months, clamping the day (29 Feb + 12 months = 28 Feb)."""
+    y, m = divmod(d.month - 1 + n, 12)
+    year, month = d.year + y, m + 1
+    return date(year, month, min(d.day, calendar.monthrange(year, month)[1]))
+
+
+def months_between(reg, ren):
+    """Whole months from reg to ren, or None if it isn't an exact number."""
+    n = (ren.year - reg.year) * 12 + ren.month - reg.month
+    return n if n > 0 and add_months(reg, n) == ren else None
+
+
+def order_hint(raw):
+    """'dmy' or 'mdy' if a slash date has a part above 12, else None."""
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})", (raw or "").strip())
+    if not m:
+        return None
+    a, b = int(m.group(1)), int(m.group(2))
+    return "dmy" if a > 12 else "mdy" if b > 12 else None
+
+
+def _fits_cycle(raw_reg, raw_ren, months, order):
+    reg = parse_date(raw_reg, order)[0]
+    ren = parse_date(raw_ren, order)[0]
+    return bool(months and reg and ren and add_months(reg, months) == ren)
+
+
+def resolve_dates(rid, raw_reg, raw_ren, months, issues):
+    """Settle ambiguous dates: other date in the row first, then the cycle.
+
+    If both readings still fit, default to day-first and log it.
+    """
+    raws = {"registered_on": raw_reg, "renews_on": raw_ren}
+    plain = {f: parse_date(r) for f, r in raws.items()}
+    order, how = None, ""
+    if any(amb for _, amb, _ in plain.values()):
+        hint = order_hint(raw_reg) or order_hint(raw_ren)
+        if hint:
+            order, how = hint, "the other date in the row"
+        else:
+            fits = [o for o in ("dmy", "mdy")
+                    if _fits_cycle(raw_reg, raw_ren, months, o)]
+            if len(fits) == 1:
+                order, how = fits[0], "the billing cycle"
+    result = {}
+    for field, raw in raws.items():
+        d, amb, note = plain[field]
+        if amb and order:
+            d = parse_date(raw, order)[0]
+            issues.log(rid, field, raw, "ambiguous_date",
+                       f"resolved using {how}, read as {order}")
+        elif amb:
+            issues.log(rid, field, raw, "ambiguous_date",
+                       "assumed day-first (both readings fit)")
+        elif d is None:
+            issues.log(rid, field, raw, note, "left blank")
+        result[field] = d
+    return result["registered_on"], result["renews_on"]
+
+
 # ------------------------------------------------------------- row logic
 
 def clean_row(raw, issues):
     """Return a clean dict, or None if the row is dropped."""
     rid = (raw.get("record_id") or "").strip()
 
-    domain, note = parse_domain(raw.get("domain"))
+    domain_raw = raw.get("domain") or ""
+    domain, note = parse_domain(domain_raw)
     if domain is None:
-        issues.log(rid, "domain", raw.get("domain"), note, "row dropped")
+        issues.log(rid, "domain", domain_raw, note, "row dropped")
         return None
-    if domain != (raw.get("domain") or "").strip():
-        issues.log(rid, "domain", raw.get("domain"), "normalised", f"changed to {domain}")
+    if domain != domain_raw.strip():
+        issues.log(rid, "domain", domain_raw, "normalised", f"changed to {domain}")
 
     status_raw = (raw.get("status") or "").strip()
     status = STATUS_MAP.get(status_raw.lower(), "unknown")
     if status == "unknown":
         issues.log(rid, "status", status_raw, "blank or unrecognised status", "set to unknown")
+    elif status_raw != status:
+        issues.log(rid, "status", status_raw, "normalised", f"changed to {status}")
+
+    service_raw = (raw.get("service") or "").strip()
+    service = SERVICE_MAP.get(service_raw.lower(), service_raw)
+    if service != service_raw:
+        issues.log(rid, "service", service_raw, "normalised", f"changed to {service}")
 
     amount, currency, note = parse_money(raw.get("amount"))
     if currency == "USD":
@@ -211,25 +293,32 @@ def clean_row(raw, issues):
     if amount is not None and amount == int(amount):
         amount = int(amount)   # whole rupees print as 3500, not 3500.0
 
-    dates = {}
-    for field in ("registered_on", "renews_on"):
-        d, ambiguous, note = parse_date(raw.get(field))
-        if d is None:
-            issues.log(rid, field, raw.get(field), note, "left blank")
-        elif ambiguous:
-            issues.log(rid, field, raw.get(field), "ambiguous_date", "assumed day-first")
-        dates[field] = d
-
     months, note = parse_cycle(raw.get("billing_cycle"))
-    if months is None:
-        issues.log(rid, "billing_cycle", raw.get("billing_cycle"), note, "left blank")
+    cycle_raw = (raw.get("billing_cycle") or "").strip()
+    if months is not None and cycle_raw != str(months):
+        issues.log(rid, "billing_cycle", cycle_raw, "normalised", f"changed to {months}")
 
-    email = (raw.get("contact_email") or "").strip().lower()
+    reg, ren = resolve_dates(rid, raw.get("registered_on"),
+                             raw.get("renews_on"), months, issues)
+
+    if months is None:
+        inferred = months_between(reg, ren) if reg and ren else None
+        if inferred:
+            months = inferred
+            issues.log(rid, "billing_cycle", cycle_raw, note,
+                       f"inferred {months} months from the dates")
+        else:
+            issues.log(rid, "billing_cycle", cycle_raw, note, "left blank")
+
+    email_raw = raw.get("contact_email") or ""
+    email = email_raw.strip().lower()
     if email and not EMAIL_RE.fullmatch(email):
-        issues.log(rid, "contact_email", raw.get("contact_email"), "invalid email", "left blank")
+        issues.log(rid, "contact_email", email_raw, "invalid email", "left blank")
         email = ""
     elif not email:
-        issues.log(rid, "contact_email", raw.get("contact_email"), "blank email", "left blank")
+        issues.log(rid, "contact_email", email_raw, "blank email", "left blank")
+    elif email != email_raw:
+        issues.log(rid, "contact_email", email_raw, "normalised", f"changed to {email}")
 
     cust = (raw.get("customer_id") or "").strip()
     if not cust:
@@ -237,9 +326,9 @@ def clean_row(raw, issues):
 
     return {
         "record_id": rid, "customer_id": cust, "canonical_domain": domain,
-        "service": (raw.get("service") or "").strip(),
+        "service": service,
         "billing_cycle_months": months, "amount_pkr": amount,
-        "registered_on": dates["registered_on"], "renews_on": dates["renews_on"],
+        "registered_on": reg, "renews_on": ren,
         "status": status, "contact_email": email,
     }
 
@@ -257,6 +346,11 @@ def check_row(c, issues):
         issues.log(rid, "renews_on", f"{reg} -> {ren}",
                    "renews_on not after registered_on", "kept, flagged")
 
+    months = c["billing_cycle_months"]
+    if reg and ren and months and ren > reg and add_months(reg, months) != ren:
+        issues.log(rid, "billing_cycle_months", str(months),
+                   f"cycle does not match dates ({reg} to {ren})", "kept, flagged")
+
     amt = c["amount_pkr"]
     if amt is not None:
         if amt == 0:
@@ -270,6 +364,61 @@ def check_row(c, issues):
     if ren and ren < TODAY and c["status"] == "active":
         issues.log(rid, "renews_on", str(ren),
                    "renewal date already passed but status is active", "kept, flagged")
+
+
+# ----------------------------------------------------------------- dedupe
+
+def dedupe(kept, issues):
+    """Return (rows_kept, conflict_ids). Drops later duplicates, logs everything."""
+    # 1. Reused record_ids: different renewals sharing one id.
+    id_counts = Counter(c["record_id"] for c in kept)
+    for c in kept:
+        if id_counts[c["record_id"]] > 1:
+            issues.log(c["record_id"], "record_id",
+                       f"{c['record_id']} ({c['canonical_domain']})",
+                       "duplicate_record_id (different renewals share this id)",
+                       "kept, flagged")
+
+    # 2. Duplicate renewals: same (domain, service, renews_on).
+    seen = {}
+    out, conflicts = [], set()
+    for c in kept:
+        if c["renews_on"] is None:      # no date, so we cannot safely match it
+            out.append(c)
+            continue
+        key = (c["canonical_domain"], c["service"].lower(), c["renews_on"])
+        first = seen.get(key)
+        if first is None:
+            seen[key] = c
+            out.append(c)
+        elif first["amount_pkr"] == c["amount_pkr"]:
+            issues.log(c["record_id"], "row", c["record_id"],
+                       f"duplicate of {first['record_id']}",
+                       f"row dropped, merged into {first['record_id']}")
+        else:
+            conflicts.add(first["record_id"])
+            issues.log(first["record_id"], "amount_pkr", str(first["amount_pkr"]),
+                       f"conflicting_duplicate: {c['record_id']} says {c['amount_pkr']}",
+                       "kept first row, flagged, excluded from headline total")
+            issues.log(c["record_id"], "row", c["record_id"],
+                       f"conflicting_duplicate of {first['record_id']}",
+                       "row dropped, amount logged")
+    return out, conflicts
+
+
+def check_customers(kept, issues):
+    """Flag customers that appear with more than one contact email."""
+    by_cust = defaultdict(list)
+    for c in kept:
+        if c["customer_id"] and c["contact_email"]:
+            by_cust[c["customer_id"]].append(c)
+    for cust, rows in by_cust.items():
+        emails = sorted({r["contact_email"] for r in rows})
+        if len(emails) > 1:
+            for r in rows:
+                issues.log(r["record_id"], "contact_email", r["contact_email"],
+                           f"customer {cust} has several contact emails: {', '.join(emails)}",
+                           "kept, flagged")
 
 
 # ----------------------------------------------------------------- output
@@ -290,6 +439,11 @@ def main(path):
 
     for c in kept:
         check_row(c, issues)
+
+    kept, conflict_ids = dedupe(kept, issues)
+    check_customers(kept, issues)
+
+    issues.rows.sort(key=lambda r: r["record_id"])   # stable: keeps each record's issues together
 
     write_csv("issues.csv",
               ["record_id", "field", "raw_value", "problem", "action_taken"],
