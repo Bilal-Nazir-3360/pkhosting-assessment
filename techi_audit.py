@@ -1,11 +1,19 @@
 """Polite metadata reader for TECHi.com (Part B)."""
+import hashlib
 import json
+import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
+from pathlib import Path
 from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
+import requests
 from bs4 import BeautifulSoup
+
+log = logging.getLogger("techi_audit")
 
 # Rule: a month is 30 days and a year is 365 days. The site only says
 # "2 months ago", so an exact calendar answer is not possible.
@@ -13,6 +21,10 @@ USER_AGENT = "TechAboutAssessmentBot/1.0 (bachohan786@gmail.com)"
 SITE_HOST = "www.techi.com"
 POST_SITEMAP_RE = re.compile(r"^post-sitemap\d*\.xml$")
 UNIT_DAYS = {"week": 7, "month": 30, "year": 365}
+ROBOTS_URL = "https://www.techi.com/robots.txt"
+TIMEOUT = (5, 10)      # seconds: connect, read
+MIN_DELAY = 1.0        # brief: one request per second
+CACHED_STATUSES = (200, 404)   # timeouts and 5xx are never cached
 
 RELATIVE_RE = re.compile(
     r"(\d+)\s*(minute|hour|day|week|month|year)s?\s+ago", re.IGNORECASE
@@ -200,3 +212,99 @@ def sitemap_lines_from_robots(robots_text):
         if match:
             found.append(match.group(1))
     return found
+class PoliteFetcher:
+    """The only place that touches the network."""
+
+    def __init__(self, session, cache_dir, clock=time.monotonic,
+                 sleep=time.sleep, now=datetime.now):
+        self.session = session
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.clock = clock
+        self.sleep = sleep
+        self.now = now
+        self._last_request = None   # clock value when the last request ended
+        self._delay = MIN_DELAY
+        self._robots = None         # RobotFileParser once loaded
+        self._block_all = False
+        self._robots_loaded = False
+
+    # --- cache ---
+    def _cache_path(self, url):
+        name = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        return self.cache_dir / (name + ".json")
+
+    def _read_cache(self, url):
+        path = self._cache_path(url)
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            log.warning("Bad cache file for %s, fetching again", url)
+            return None
+
+    def _write_cache(self, url, page):
+        text = json.dumps(page, ensure_ascii=False)
+        self._cache_path(url).write_text(text, encoding="utf-8")
+
+    # --- network ---
+    def _wait(self):
+        if self._last_request is None:
+            return
+        gap = self.clock() - self._last_request
+        if gap < self._delay:
+            self.sleep(self._delay - gap)
+
+    def _request(self, url, timeout):
+        """One real request. Returns a page dict or None on network error."""
+        self._wait()
+        try:
+            response = self.session.get(
+                url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
+        except requests.RequestException as error:
+            log.warning("Request failed for %s: %s", url, error)
+            return None
+        finally:
+            self._last_request = self.clock()
+        page = {
+            "status": response.status_code,
+            "body": response.text,
+            "fetched_at": self.now().isoformat(timespec="seconds"),
+        }
+        if page["status"] in CACHED_STATUSES:
+            self._write_cache(url, page)
+        return page
+
+    # --- robots ---
+    def _load_robots(self):
+        self._robots_loaded = True
+        page = self._read_cache(ROBOTS_URL) or self._request(ROBOTS_URL, TIMEOUT)
+        if page is None or page["status"] not in (200, 404):
+            log.warning("robots.txt not readable, blocking all fetches")
+            self._block_all = True
+        elif page["status"] == 200:
+            parser = RobotFileParser()
+            parser.parse(page["body"].lstrip("\ufeff").splitlines())
+            self._robots = parser
+            delay = parser.crawl_delay(USER_AGENT)
+            self._delay = max(MIN_DELAY, float(delay or 0))
+        # 404: no robots.txt, so everything is allowed
+
+    def _allowed(self, url):
+        if not self._robots_loaded:
+            self._load_robots()
+        if self._block_all:
+            return False
+        return self._robots is None or self._robots.can_fetch(USER_AGENT, url)
+
+    # --- public ---
+    def get(self, url, timeout=TIMEOUT):
+        """Page dict (status, body, fetched_at), or None if skipped or failed."""
+        cached = self._read_cache(url)
+        if cached:
+            return cached
+        if not self._allowed(url):
+            log.warning("Blocked by robots.txt: %s", url)
+            return None
+        return self._request(url, timeout)
